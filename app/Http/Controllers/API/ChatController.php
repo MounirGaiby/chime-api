@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Services\AIService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class ChatController extends Controller
 {
@@ -20,7 +21,18 @@ class ChatController extends Controller
 
     public function chat(Request $request, Conversation $conversation)
     {
+        Log::channel('chat')->info('Chat request received', [
+            'user_id' => auth()->id(),
+            'conversation_id' => $conversation->id,
+            'request_data' => $request->all(),
+            'files' => $request->hasFile('attachments') ? 'Has files' : 'No files',
+        ]);
+
         if ($conversation->user_id !== auth()->id()) {
+            Log::channel('chat')->warning('Unauthorized chat attempt', [
+                'user_id' => auth()->id(),
+                'conversation_id' => $conversation->id,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized'
@@ -28,16 +40,70 @@ class ChatController extends Controller
         }
 
         try {
+            // Log the raw request for debugging
+            Log::channel('attachments')->debug('Raw request', [
+                'files' => $request->allFiles(),
+                'headers' => $request->headers->all(),
+                'content_type' => $request->header('Content-Type'),
+            ]);
+
             $request->validate([
                 'message' => 'required|string',
                 'model' => ['nullable', 'string', Rule::in(['deepseek-chat', 'deepseek-reasoner'])],
                 'temperature' => 'nullable|numeric|between:0.1,1.0',
+                'attachments' => 'nullable|array',
+                'attachments.*.type' => 'required|in:file,image,url',
+                'attachments.*.file' => 'required_if:attachments.*.type,file,image|file|max:10240',
+                'attachments.*.url' => 'required_if:attachments.*.type,url|url',
             ]);
 
+            // Process message with attachments
+            $messageWithAttachments = $request->message;
+            if ($request->hasFile('attachments')) {
+                Log::channel('attachments')->info('Processing attachments', [
+                    'attachment_count' => count($request->file('attachments')),
+                ]);
+
+                foreach ($request->file('attachments') as $index => $file) {
+                    Log::channel('attachments')->info('Processing file', [
+                        'index' => $index,
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'size' => $file->getSize(),
+                    ]);
+
+                    // Add file content to message
+                    $fileContent = $this->aiService->provider->processFileContent($file);
+                    $messageWithAttachments .= "\n\nFile content (" . $file->getClientOriginalName() . "):\n" . $fileContent;
+                }
+            }
+
+            // Get conversation history
+            $previousMessages = [];
+            $previousChats = $conversation->chats()
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            foreach ($previousChats as $previousChat) {
+                $previousMessages[] = ['role' => 'user', 'content' => $previousChat->message];
+                $previousMessages[] = ['role' => 'assistant', 'content' => $previousChat->response];
+            }
+
+            // Check total token count
+            $totalTokens = $conversation->chats()->sum('tokens_used');
+            if ($totalTokens > 8000) { // Set a reasonable limit
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Conversation is too long. Please start a new one.',
+                    'total_tokens' => $totalTokens
+                ], 400);
+            }
+
             $response = $this->aiService->chat(
-                $request->message,
+                $messageWithAttachments,
                 $request->model,
-                $request->temperature
+                $request->temperature,
+                $previousMessages
             );
 
             $chat = $conversation->chats()->create([
@@ -51,14 +117,46 @@ class ChatController extends Controller
                 ),
             ]);
 
+            // Handle attachments
+            if ($request->has('attachments')) {
+                foreach ($request->attachments as $attachment) {
+                    $attachmentData = [
+                        'type' => $attachment['type'],
+                        'name' => $attachment['name'] ?? null,
+                    ];
+
+                    if ($attachment['type'] === 'url') {
+                        $attachmentData['url'] = $attachment['url'];
+                    } else {
+                        $path = $attachment['file']->store('chat-attachments', 'public');
+                        $attachmentData['path'] = $path;
+                    }
+
+                    $chat->attachments()->create($attachmentData);
+                }
+            }
+
             $conversation->update(['last_message_at' => now()]);
+
+            // Add token warning if needed
+            $warningMessage = null;
+            if ($totalTokens > 6000) {
+                $warningMessage = 'Conversation is getting long. Consider starting a new one soon.';
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $chat,
+                'data' => $chat->load('attachments'),
+                'warning' => $warningMessage,
+                'total_tokens' => $totalTokens + $response->usage->total_tokens
             ]);
 
         } catch (\Exception $e) {
+            Log::channel('chat')->error('Chat error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()

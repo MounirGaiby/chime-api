@@ -1,66 +1,345 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Chime - AI Chat API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A robust Laravel-based API for AI chat applications, featuring DeepSeek AI integration with support for multiple models and real-time streaming.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### Authentication
+- JWT (JSON Web Token) based authentication
+- Secure token management
+- Token refresh mechanism
+- Protected routes
+- Custom error handling for authentication failures
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Conversations
+- Create new conversations
+- Update conversation titles
+- Delete conversations
+- List all conversations (ordered by last activity)
+- View single conversation with its chat history
+- Automatic last_message_at timestamp updates
+- Chat count tracking per conversation
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Chat Functionality
+- Support for multiple AI models
+  - deepseek-chat
+  - deepseek-reasoner
+- Real-time streaming responses
+- Regular (non-streaming) responses
+- Temperature control (model-specific ranges)
+- Token usage tracking
+- Reasoning content support (for reasoner model)
+- Chat history retrieval
+- Chronological message ordering
+- Continuous conversation support
+  - Maintains context across messages
+  - Automatic token limit management
+  - Warning system for long conversations
+  - Token usage tracking per conversation
 
-## Learning Laravel
+### Conversation Management
+- Token limits and warnings
+  - Warning at 6,000 tokens
+  - Hard limit at 8,000 tokens per conversation
+  - Approximate token calculation (1 token ≈ 4 characters)
+- Automatic context handling
+  - Previous messages included in AI requests
+  - Both user and assistant messages maintained
+  - Chronological order preserved
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Attachments
+- Multiple attachment types support:
+  - Files (up to 10MB)
+  - Images
+  - URLs
+- Secure file storage
+- Attachment metadata handling
+- URL content processing for AI context
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### AI Integration
+- Provider-based architecture for easy expansion
+- Model validation
+- Temperature validation
+- Default values per model
+- Configurable API endpoints
+- Error handling
+- Response transformation
+- Streaming support
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Security
+- Input validation
+- Authorization checks
+- File upload restrictions
+- Secure file storage
+- Error handling
+- Rate limiting
+- Protected routes
 
-## Laravel Sponsors
+## API Endpoints
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Authentication
+```http
+POST /api/login
+POST /api/register
+POST /api/logout
+POST /api/refresh
+```
 
-### Premium Partners
+### Conversations
+```http
+GET    /api/conversations
+POST   /api/conversations
+GET    /api/conversations/{id}
+PUT    /api/conversations/{id}
+DELETE /api/conversations/{id}
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+### Chat
+```http
+POST /api/conversations/{id}/chat
+POST /api/conversations/{id}/chat/stream
+GET  /api/conversations/{id}/history
+GET  /api/models
+```
 
-## Contributing
+## Models Configuration
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```php
+'allowed_models' => [
+    'deepseek-chat' => [
+        'temperature_range' => [0.1, 1.0],
+        'default_temperature' => 0.7,
+        'endpoint' => '/v1/chat/completions',
+    ],
+    'deepseek-reasoner' => [
+        'temperature_range' => [0.1, 0.8],
+        'default_temperature' => 0.5,
+        'endpoint' => '/v1/chat/completions',
+    ],
+]
+```
 
-## Code of Conduct
+## Database Structure
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Users Table
+- id
+- name
+- email
+- password
+- created_at
+- updated_at
 
-## Security Vulnerabilities
+### Conversations Table
+- id
+- user_id
+- title
+- last_message_at
+- created_at
+- updated_at
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### Chats Table
+- id
+- conversation_id
+- message
+- response
+- reasoning_content
+- model
+- tokens_used
+- temperature
+- created_at
+- updated_at
 
-## License
+### Chat Attachments Table
+- id
+- chat_id
+- type
+- name
+- path
+- url
+- metadata
+- created_at
+- updated_at
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Environment Configuration
+Required environment variables:
+```env
+JWT_SECRET=your_jwt_secret
+JWT_ALGO=HS256
+OPENAI_DEEPSEEK_API_KEY=your_deepseek_api_key
+```
+
+## Error Handling
+- Custom JSON responses for all errors
+- Proper HTTP status codes
+- Validation error messages
+- Authentication error handling
+- API error handling
+- File upload error handling
+
+## Technical Implementation
+- Laravel 10.x
+- JWT Authentication
+- PostgreSQL database
+- Provider-based AI service architecture
+- Server-Sent Events for streaming
+- Repository pattern
+- Service layer architecture
+- Middleware protection
+- Custom exception handling
+
+## Future Considerations
+- Support for additional AI providers
+- Enhanced attachment processing
+- Advanced conversation management
+- User preferences
+- Usage analytics
+- Rate limiting improvements
+
+## API Usage Examples
+
+### Chat with Attachments
+
+#### File/Image Upload in Postman
+1. Select "POST" method and enter your endpoint
+2. Select "form-data" in the Body tab
+3. Add the following keys:
+```
+message                 | "Analyze this document for me"
+model                  | "deepseek-chat"
+temperature            | 0.7
+attachments[0][type]   | "file"
+attachments[0][name]   | "document.pdf"
+attachments[0][file]   | Select File (Enable File type in Postman)
+```
+
+Important: For the file field (attachments[0][file]):
+- Click the dropdown on the right of the key field
+- Select "File" type
+- Then choose your file
+
+Example curl command:
+```bash
+curl -X POST "http://your-api/api/conversations/1/chat" \
+     -H "Authorization: Bearer your_token" \
+     -H "Accept: application/json" \
+     -F "message=Analyze this document for me" \
+     -F "model=deepseek-chat" \
+     -F "temperature=0.7" \
+     -F "attachments[0][type]=file" \
+     -F "attachments[0][name]=document.pdf" \
+     -F "attachments[0][file]=@/path/to/your/document.pdf"
+```
+
+#### URL Attachment
+```http
+POST /api/conversations/{id}/chat
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+
+{
+    "message": "Summarize this webpage",
+    "model": "deepseek-chat",
+    "attachments": [
+        {
+            "type": "url",
+            "name": "Article",
+            "url": "https://example.com/article"
+        }
+    ]
+}
+```
+
+#### Response Format
+```json
+{
+    "success": true,
+    "data": {
+        "id": 1,
+        "conversation_id": 1,
+        "message": "Analyze this document for me",
+        "response": "Based on the document you provided...",
+        "model": "deepseek-chat",
+        "tokens_used": 150,
+        "temperature": 0.7,
+        "created_at": "2024-02-12T12:00:00.000000Z",
+        "updated_at": "2024-02-12T12:00:00.000000Z",
+        "attachments": [
+            {
+                "id": 1,
+                "chat_id": 1,
+                "type": "file",
+                "name": "document.pdf",
+                "path": "chat-attachments/xyz123.pdf",
+                "url": null,
+                "metadata": null,
+                "created_at": "2024-02-12T12:00:00.000000Z",
+                "updated_at": "2024-02-12T12:00:00.000000Z"
+            }
+        ]
+    }
+}
+```
+
+### Continuous Conversation Example
+The API automatically maintains conversation context. Each new message includes the full conversation history:
+
+```http
+POST /api/conversations/{id}/chat
+Content-Type: application/json
+Authorization: Bearer your_jwt_token
+
+// First message
+{
+    "message": "What's the highest mountain in the world?",
+    "model": "deepseek-chat"
+}
+
+// Response includes token tracking
+{
+    "success": true,
+    "data": {
+        "message": "What's the highest mountain in the world?",
+        "response": "Mount Everest is the highest mountain...",
+        "tokens_used": 45
+    },
+    "total_tokens": 45
+}
+
+// Second message - API automatically includes previous context
+{
+    "message": "How tall is it?",
+    "model": "deepseek-chat"
+}
+
+// Response shows accumulated tokens
+{
+    "success": true,
+    "data": {
+        "message": "How tall is it?",
+        "response": "Mount Everest stands at 29,029 feet (8,848 meters)...",
+        "tokens_used": 38
+    },
+    "total_tokens": 83,
+    "warning": "Conversation is getting long. Consider starting a new one soon." // Appears when needed
+}
+```
+
+### Token Management
+- Conversations track total token usage
+- Warning message appears at 6,000 tokens
+- Error response at 8,000 tokens:
+```json
+{
+    "success": false,
+    "message": "Conversation is too long. Please start a new one.",
+    "total_tokens": 8234
+}
+```
+
+### Notes
+- Maximum file size: 10MB
+- Supported file types: pdf, doc, docx, txt, jpg, png, etc.
+- Files are stored in the `storage/app/public/chat-attachments` directory
+- URLs are processed and their content is included in the AI context
+- Multiple attachments can be sent in a single request
+- Attachments are automatically associated with the chat message

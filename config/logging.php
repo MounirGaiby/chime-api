@@ -126,6 +126,20 @@ return [
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],
+
+        'chat' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/chat/chat.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+        
+        'attachments' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/attachments/attachments.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
     ],
 
 ];

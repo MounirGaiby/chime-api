@@ -28,4 +28,9 @@ class Chat extends Model
     {
         return $this->belongsTo(Conversation::class);
     }
+
+    public function attachments()
+    {
+        return $this->hasMany(ChatAttachment::class);
+    }
 } 

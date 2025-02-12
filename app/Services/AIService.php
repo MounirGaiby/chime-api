@@ -31,9 +31,9 @@ class AIService
         }
     }
 
-    public function chat(string $message, string $model = null, float $temperature = null)
+    public function chat(string $message, string $model = null, float $temperature = null, array $previousMessages = [])
     {
-        return $this->provider->chat($message, $model, $temperature);
+        return $this->provider->chat($message, $model, $temperature, $previousMessages);
     }
 
     public function getModels()

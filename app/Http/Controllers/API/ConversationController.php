@@ -11,6 +11,7 @@ class ConversationController extends Controller
     public function index()
     {
         $conversations = auth()->user()->conversations()
+            ->withCount('chats')
             ->orderBy('last_message_at', 'desc')
             ->get();
 
@@ -68,6 +69,29 @@ class ConversationController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Conversation deleted successfully'
+        ]);
+    }
+
+    public function update(Request $request, Conversation $conversation)
+    {
+        if ($conversation->user_id !== auth()->id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $request->validate([
+            'title' => 'required|string|max:255',
+        ]);
+
+        $conversation->update([
+            'title' => $request->title
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $conversation
         ]);
     }
 } 

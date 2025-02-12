@@ -6,7 +6,7 @@ use InvalidArgumentException;
 
 class DeepseekProvider extends BaseProvider
 {
-    public function chat(string $message, string $model = null, float $temperature = null)
+    public function chat(string $message, string $model = null, float $temperature = null, array $previousMessages = [])
     {
         $model = $model ?? $this->config['default_model'];
 
@@ -20,12 +20,19 @@ class DeepseekProvider extends BaseProvider
 
         $temperature = $temperature ?? $this->getDefaultTemperature($model);
         
+        // Build messages array with history
+        $messages = $previousMessages;
+        $messages[] = ['role' => 'user', 'content' => $message];
+
+        // Calculate total tokens (approximate)
+        $totalTokens = $this->calculateApproximateTokens($messages);
+        if ($totalTokens > 10000) { // DeepSeek's limit
+            throw new \Exception('Conversation is too long. Please start a new one.');
+        }
+
         $response = $this->http->post($this->getModelEndpoint($model), [
             'model' => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => 'You are a helpful assistant'],
-                ['role' => 'user', 'content' => $message],
-            ],
+            'messages' => $messages,
             'temperature' => $temperature,
             'stream' => false,
         ]);
@@ -36,7 +43,6 @@ class DeepseekProvider extends BaseProvider
 
         $responseData = $response->json();
         
-        // Transform the response to match the expected format
         return (object) [
             'choices' => [
                 (object) [
@@ -48,6 +54,37 @@ class DeepseekProvider extends BaseProvider
             ],
             'usage' => (object) $responseData['usage']
         ];
+    }
+
+    private function calculateApproximateTokens(array $messages): int
+    {
+        $totalTokens = 0;
+        foreach ($messages as $message) {
+            // Rough estimation: 1 token ≈ 4 characters
+            $totalTokens += strlen($message['content']) / 4;
+        }
+        return (int) $totalTokens;
+    }
+
+    private function processFileContent($file): string
+    {
+        $content = '';
+        $extension = strtolower($file->getClientOriginalExtension());
+        
+        switch ($extension) {
+            case 'txt':
+                $content = file_get_contents($file->getRealPath());
+                break;
+            case 'pdf':
+                // You might want to use a PDF parser library here
+                $content = 'PDF content: ' . file_get_contents($file->getRealPath());
+                break;
+            // Add more file type handlers as needed
+            default:
+                $content = 'File content type not supported: ' . $extension;
+        }
+        
+        return $content;
     }
 
     public function getModels()
