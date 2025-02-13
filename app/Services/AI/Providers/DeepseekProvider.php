@@ -58,12 +58,12 @@ class DeepseekProvider extends BaseProvider
 
     private function calculateApproximateTokens(array $messages): int
     {
-        $totalTokens = 0;
+        $totalChars = 0;
         foreach ($messages as $message) {
-            // Rough estimation: 1 token ≈ 4 characters
-            $totalTokens += strlen($message['content']) / 4;
+            $totalChars += strlen($message['content']);
         }
-        return (int) $totalTokens;
+        // Rough approximation: 1 token ≈ 4 characters
+        return (int) ceil($totalChars / 4);
     }
 
     private function processFileContent($file): string
@@ -117,7 +117,6 @@ class DeepseekProvider extends BaseProvider
         ])->post($this->getModelEndpoint($model), [
             'model' => $model,
             'messages' => [
-                ['role' => 'system', 'content' => 'You are a helpful assistant'],
                 ['role' => 'user', 'content' => $message],
             ],
             'temperature' => $temperature,

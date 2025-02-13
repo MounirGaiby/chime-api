@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\ChatController;
 use App\Http\Controllers\API\ConversationController;
+use App\Http\Controllers\API\AdminController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,4 +45,11 @@ Route::middleware('auth:api')->group(function () {
 
     // History route
     Route::get('conversations/{conversation}/history', [ChatController::class, 'history']);
+});
+
+// Super Admin routes
+Route::middleware(['auth:api', 'super.admin'])->prefix('admin')->group(function () {
+    Route::get('providers', [AdminController::class, 'listProviders']);
+    Route::post('providers', [AdminController::class, 'addProvider']);
+    Route::post('models', [AdminController::class, 'addModel']);
 });

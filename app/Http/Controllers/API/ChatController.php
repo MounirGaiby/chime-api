@@ -49,13 +49,16 @@ class ChatController extends Controller
 
             $request->validate([
                 'message' => 'required|string',
-                'model' => ['nullable', 'string', Rule::in(['deepseek-chat', 'deepseek-reasoner'])],
-                'temperature' => 'nullable|numeric|between:0.1,1.0',
-                'attachments' => 'nullable|array',
-                'attachments.*.type' => 'required|in:file,image,url',
-                'attachments.*.file' => 'required_if:attachments.*.type,file,image|file|max:10240',
-                'attachments.*.url' => 'required_if:attachments.*.type,url|url',
+                'model' => 'nullable|string',
+                'temperature' => 'nullable|numeric|min:0|max:1'
             ]);
+
+            if ($request->model && !$this->aiService->validateModel($request->model)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected model is invalid.'
+                ], 422);
+            }
 
             // Process message with attachments
             $messageWithAttachments = $request->message;

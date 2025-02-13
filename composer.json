@@ -9,7 +9,6 @@
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^10.10",
         "laravel/tinker": "^2.8",
-        "openai-php/client": "^0.10.3",
         "php-open-source-saver/jwt-auth": "^2.7"
     },
     "require-dev": {
