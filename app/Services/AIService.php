@@ -67,10 +67,10 @@ class AIService
         return $provider->getDefaultTemperature($model);
     }
 
-    public function chatStream(string $message, string $model = null, float $temperature = null)
+    public function chatStream(string $message, string $model = null, float $temperature = null, array $previousMessages = [])
     {
         $provider = $this->getProviderForModel($model);
-        return $provider->chatStream($message, $model, $temperature);
+        return $provider->chatStream($message, $model, $temperature, $previousMessages);
     }
 
     public function getModels()
@@ -79,4 +79,4 @@ class AIService
             ->where('is_active', true)
             ->get();
     }
-} 
+}

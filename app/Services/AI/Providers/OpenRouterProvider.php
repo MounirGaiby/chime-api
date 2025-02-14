@@ -26,14 +26,14 @@ class OpenRouterProvider extends BaseProvider
         }
 
         $temperature = $temperature ?? $this->getDefaultTemperature($model);
-        
+
         // Build messages array with history and handle files if present
         $messages = $previousMessages;
-        
+
         if ($files && $this->modelSupportsFiles($model)) {
             $content = [];
             $content[] = ['type' => 'text', 'text' => $message];
-            
+
             foreach ($files as $file) {
                 if ($file['type'] === 'image') {
                     $content[] = [
@@ -44,7 +44,7 @@ class OpenRouterProvider extends BaseProvider
                     ];
                 }
             }
-            
+
             $messages[] = ['role' => 'user', 'content' => $content];
         } else {
             $messages[] = ['role' => 'user', 'content' => $message];
@@ -62,7 +62,7 @@ class OpenRouterProvider extends BaseProvider
         }
 
         $responseData = $response->json();
-        
+
         return (object) [
             'choices' => [
                 (object) [
@@ -88,7 +88,7 @@ class OpenRouterProvider extends BaseProvider
 
         // Check both the model's supports_files field and additional_settings
         $additionalSupport = !empty($aiModel->additional_settings['supports_files']);
-        
+
         \Log::debug('Model file support check', [
             'model' => $model,
             'supports_files' => $aiModel->supports_files,
@@ -117,7 +117,7 @@ class OpenRouterProvider extends BaseProvider
         }
 
         $temperature = $temperature ?? $this->getDefaultTemperature($model);
-        
+
         $response = $this->http->withOptions([
             'stream' => true,
         ])->post($this->getModelEndpoint($model), [
@@ -135,4 +135,4 @@ class OpenRouterProvider extends BaseProvider
 
         return $response->toPsrResponse()->getBody();
     }
-} 
+}

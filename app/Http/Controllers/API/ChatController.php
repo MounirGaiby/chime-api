@@ -9,6 +9,7 @@ use App\Services\AIService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
+use App\Models\AIModel;
 
 class ChatController extends Controller
 {
@@ -50,8 +51,12 @@ class ChatController extends Controller
             $request->validate([
                 'message' => 'required|string',
                 'model' => 'nullable|string',
-                'temperature' => 'nullable|numeric|min:0|max:1'
+                'temperature' => 'nullable|numeric|min:0|max:1',
+                'stream' => 'nullable|boolean'
             ]);
+
+            // Default stream to true unless explicitly set to false
+            $shouldStream = $request->input('stream', true);
 
             if ($request->model && !$this->aiService->validateModel($request->model)) {
                 return response()->json([
@@ -94,7 +99,7 @@ class ChatController extends Controller
 
             // Check total token count
             $totalTokens = $conversation->chats()->sum('tokens_used');
-            if ($totalTokens > 8000) { // Set a reasonable limit
+            if ($totalTokens > 10000) { // Set a reasonable limit
                 return response()->json([
                     'success' => false,
                     'message' => 'Conversation is too long. Please start a new one.',
@@ -102,6 +107,11 @@ class ChatController extends Controller
                 ], 400);
             }
 
+            if ($shouldStream) {
+                return $this->handleStreamResponse($request, $conversation, $messageWithAttachments, $previousMessages);
+            }
+
+            // Non-streaming response logic
             $response = $this->aiService->chat(
                 $messageWithAttachments,
                 $request->model,
@@ -153,7 +163,6 @@ class ChatController extends Controller
                 'warning' => $warningMessage,
                 'total_tokens' => $totalTokens + $response->usage->total_tokens
             ]);
-
         } catch (\Exception $e) {
             Log::channel('chat')->error('Chat error', [
                 'error' => $e->getMessage(),
@@ -167,30 +176,136 @@ class ChatController extends Controller
         }
     }
 
+    private function handleStreamResponse(Request $request, Conversation $conversation, string $message, array $previousMessages)
+    {
+        $stream = $this->aiService->chatStream(
+            $message,
+            $request->model,
+            $request->temperature,
+            $previousMessages
+        );
+
+        return response()->stream(function () use ($stream, $conversation, $request) {
+            $fullResponse = '';
+            $fullReasoningContent = '';
+            $tokens = 0;
+
+            while (!$stream->eof()) {
+                $line = trim($stream->read(4096));
+                if (empty($line)) continue;
+
+                $lines = explode("\n", $line);
+                foreach ($lines as $jsonLine) {
+                    if (empty($jsonLine)) continue;
+                    if (strpos($jsonLine, 'data: ') === 0) {
+                        $jsonLine = substr($jsonLine, 6);
+                    }
+
+                    try {
+                        $chunk = json_decode($jsonLine, true);
+                        if (json_last_error() !== JSON_ERROR_NONE) continue;
+
+                        if (isset($chunk['choices'][0]['delta']['reasoning_content'])) {
+                            $content = $chunk['choices'][0]['delta']['reasoning_content'];
+                            $fullReasoningContent .= $content;
+
+                            echo "data: " . json_encode([
+                                'reasoning_content' => $content,
+                                'done' => false
+                            ]) . "\n\n";
+
+                            ob_flush();
+                            flush();
+                        }
+
+                        if (isset($chunk['choices'][0]['delta']['content'])) {
+                            $content = $chunk['choices'][0]['delta']['content'];
+                            $fullResponse .= $content;
+
+                            echo "data: " . json_encode([
+                                'content' => $content,
+                                'done' => false
+                            ]) . "\n\n";
+
+                            ob_flush();
+                            flush();
+                        }
+
+                        if (isset($chunk['usage']['total_tokens'])) {
+                            $tokens = $chunk['usage']['total_tokens'];
+                        }
+                    } catch (\Exception $e) {
+                        continue;
+                    }
+                }
+            }
+
+            $chat = $conversation->chats()->create([
+                'message' => $request->message,
+                'response' => $fullResponse,
+                'reasoning_content' => $fullReasoningContent ?: null,
+                'model' => $request->model ?? config('ai.providers.deepseek.default_model'),
+                'tokens_used' => $tokens,
+                'temperature' => $request->temperature ?? $this->aiService->getDefaultTemperature(
+                    $request->model ?? config('ai.providers.deepseek.default_model')
+                ),
+            ]);
+
+            $conversation->update(['last_message_at' => now()]);
+
+            echo "data: " . json_encode([
+                'content' => '',
+                'done' => true,
+                'chat' => $chat
+            ]) . "\n\n";
+        }, 200, [
+            'Cache-Control' => 'no-cache',
+            'Content-Type' => 'text/event-stream',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no'
+        ]);
+    }
+
     public function getModels()
     {
         try {
-            $apiModels = $this->aiService->getModels();
-            $configuredModels = config('ai.providers.deepseek.allowed_models');
-            
-            // Filter API models to only show configured ones
-            $availableModels = array_intersect(
-                array_column($apiModels['data'], 'id'),
-                array_keys($configuredModels)
-            );
+            $models = AIModel::with('provider')
+                ->where('is_active', true)
+                ->get()
+                ->map(function ($model) {
+                    return [
+                        'id' => $model->name, // The actual model identifier
+                        'display_name' => $model->display_name,
+                        'provider' => $model->provider->name,
+                        'supports_files' => $model->supports_files || !empty($model->additional_settings['supports_files']),
+                        'can_reason' => $model->can_reason ?? false,
+                        'can_access_web' => $model->can_access_web ?? false,
+                        'temperature' => [
+                            'min' => $model->min_temperature,
+                            'max' => $model->max_temperature,
+                            'default' => $model->default_temperature,
+                        ],
+                        'is_default' => $model->is_default ?? false,
+                        'is_active' => $model->is_active,
+                    ];
+                });
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'models' => $availableModels,
-                    'default_model' => config('ai.providers.deepseek.default_model'),
-                    'model_configs' => $configuredModels,
+                    'models' => $models,
+                    'default_model' => $models->firstWhere('is_default', true)['id'] ?? $models->first()['id']
                 ]
             ]);
         } catch (\Exception $e) {
+            Log::channel('api')->error('Error fetching models', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'Failed to fetch available models'
             ], 500);
         }
     }
@@ -216,115 +331,4 @@ class ChatController extends Controller
             ]
         ]);
     }
-
-    public function chatStream(Request $request, Conversation $conversation)
-    {
-        if ($conversation->user_id !== auth()->id()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        try {
-            $request->validate([
-                'message' => 'required|string',
-                'model' => ['nullable', 'string', Rule::in(['deepseek-chat', 'deepseek-reasoner'])],
-                'temperature' => 'nullable|numeric|between:0.1,1.0',
-            ]);
-
-            $stream = $this->aiService->chatStream(
-                $request->message,
-                $request->model,
-                $request->temperature
-            );
-
-            return response()->stream(function () use ($stream, $conversation, $request) {
-                $fullResponse = '';
-                $fullReasoningContent = '';
-                $tokens = 0;
-
-                while (!$stream->eof()) {
-                    $line = trim($stream->read(4096));
-                    if (empty($line)) continue;
-
-                    $lines = explode("\n", $line);
-                    foreach ($lines as $jsonLine) {
-                        if (empty($jsonLine)) continue;
-                        if (strpos($jsonLine, 'data: ') === 0) {
-                            $jsonLine = substr($jsonLine, 6);
-                        }
-                        
-                        try {
-                            $chunk = json_decode($jsonLine, true);
-                            if (json_last_error() !== JSON_ERROR_NONE) continue;
-
-                            if (isset($chunk['choices'][0]['delta']['reasoning_content'])) {
-                                $content = $chunk['choices'][0]['delta']['reasoning_content'];
-                                $fullReasoningContent .= $content;
-                                
-                                echo "data: " . json_encode([
-                                    'reasoning_content' => $content,
-                                    'done' => false
-                                ]) . "\n\n";
-                                
-                                ob_flush();
-                                flush();
-                            }
-
-                            if (isset($chunk['choices'][0]['delta']['content'])) {
-                                $content = $chunk['choices'][0]['delta']['content'];
-                                $fullResponse .= $content;
-                                
-                                echo "data: " . json_encode([
-                                    'content' => $content,
-                                    'done' => false
-                                ]) . "\n\n";
-                                
-                                ob_flush();
-                                flush();
-                            }
-
-                            if (isset($chunk['usage']['total_tokens'])) {
-                                $tokens = $chunk['usage']['total_tokens'];
-                            }
-                        } catch (\Exception $e) {
-                            continue;
-                        }
-                    }
-                }
-
-                $chat = $conversation->chats()->create([
-                    'message' => $request->message,
-                    'response' => $fullResponse,
-                    'reasoning_content' => $fullReasoningContent ?: null,
-                    'model' => $request->model ?? config('ai.providers.deepseek.default_model'),
-                    'tokens_used' => $tokens,
-                    'temperature' => $request->temperature ?? $this->aiService->getDefaultTemperature(
-                        $request->model ?? config('ai.providers.deepseek.default_model')
-                    ),
-                ]);
-
-                $conversation->update(['last_message_at' => now()]);
-
-                // Send final message
-                echo "data: " . json_encode([
-                    'content' => '',
-                    'done' => true,
-                    'chat' => $chat
-                ]) . "\n\n";
-            }, 200, [
-                'Cache-Control' => 'no-cache',
-                'Content-Type' => 'text/event-stream',
-                'Connection' => 'keep-alive',
-                'X-Accel-Buffering' => 'no' // For Nginx
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-} 
+}

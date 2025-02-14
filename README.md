@@ -100,7 +100,6 @@ DELETE /api/conversations/{id}
 # Chat Routes
 POST /api/conversations/{id}/chat
 GET  /api/models
-POST /api/conversations/{id}/chat/stream
 GET  /api/conversations/{id}/history
 ```
 

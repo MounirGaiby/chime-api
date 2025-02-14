@@ -18,7 +18,7 @@ abstract class BaseProvider
     {
         $this->provider = $provider;
         $this->apiKey = $this->getApiKey();
-        
+
         if (!$this->apiKey) {
             throw new \Exception('No valid API key found for provider');
         }
@@ -56,13 +56,13 @@ abstract class BaseProvider
             ->where('provider_id', $this->provider->id)
             ->where('is_active', true)
             ->exists();
-        
+
         Log::debug('Model validation', [
             'model_name' => $modelName,
             'provider_id' => $this->provider->id,
             'exists' => $exists
         ]);
-        
+
         return $exists;
     }
 
@@ -72,7 +72,7 @@ abstract class BaseProvider
             ->where('provider_id', $this->provider->id)
             ->first();
 
-        return $model && $temperature >= $model->min_temperature && 
+        return $model && $temperature >= $model->min_temperature &&
                $temperature <= $model->max_temperature;
     }
 
@@ -91,5 +91,4 @@ abstract class BaseProvider
     }
 
     abstract public function chat(string $message, string $model = null, float $temperature = null, array $previousMessages = []);
-    abstract public function chatStream(string $message, string $model = null, float $temperature = null);
-} 
+}

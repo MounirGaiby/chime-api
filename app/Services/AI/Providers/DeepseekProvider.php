@@ -19,7 +19,7 @@ class DeepseekProvider extends BaseProvider
         }
 
         $temperature = $temperature ?? $this->getDefaultTemperature($model);
-        
+
         // Build messages array with history
         $messages = $previousMessages;
         $messages[] = ['role' => 'user', 'content' => $message];
@@ -42,7 +42,7 @@ class DeepseekProvider extends BaseProvider
         }
 
         $responseData = $response->json();
-        
+
         return (object) [
             'choices' => [
                 (object) [
@@ -70,7 +70,7 @@ class DeepseekProvider extends BaseProvider
     {
         $content = '';
         $extension = strtolower($file->getClientOriginalExtension());
-        
+
         switch ($extension) {
             case 'txt':
                 $content = file_get_contents($file->getRealPath());
@@ -83,7 +83,7 @@ class DeepseekProvider extends BaseProvider
             default:
                 $content = 'File content type not supported: ' . $extension;
         }
-        
+
         return $content;
     }
 
@@ -98,7 +98,7 @@ class DeepseekProvider extends BaseProvider
         return $response->json();
     }
 
-    public function chatStream(string $message, string $model = null, float $temperature = null)
+    public function chatStream(string $message, string $model = null, float $temperature = null, array $previousMessages = [])
     {
         $model = $model ?? $this->config['default_model'];
 
@@ -111,14 +111,16 @@ class DeepseekProvider extends BaseProvider
         }
 
         $temperature = $temperature ?? $this->getDefaultTemperature($model);
-        
+
+        // Build messages array with history
+        $messages = $previousMessages;
+        $messages[] = ['role' => 'user', 'content' => $message];
+
         $response = $this->http->withOptions([
             'stream' => true,
         ])->post($this->getModelEndpoint($model), [
             'model' => $model,
-            'messages' => [
-                ['role' => 'user', 'content' => $message],
-            ],
+            'messages' => $messages,
             'temperature' => $temperature,
             'stream' => true,
         ]);
@@ -129,4 +131,4 @@ class DeepseekProvider extends BaseProvider
 
         return $response->toPsrResponse()->getBody();
     }
-} 
+}

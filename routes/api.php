@@ -30,15 +30,15 @@ Route::middleware('auth:api')->group(function () {
         Route::post('logout', 'logout');
         Route::post('refresh', 'refresh');
     });
-    
+
     // Conversation routes
     Route::apiResource('conversations', ConversationController::class);
-    
-    // Chat routes
-    Route::post('conversations/{conversation}/chat', [ChatController::class, 'chat']);
 
     // New route
     Route::get('models', [ChatController::class, 'getModels']);
+
+    // Chat routes
+    Route::post('conversations/{conversation}/chat', [ChatController::class, 'chat']);
 
     // Streaming route
     Route::post('conversations/{conversation}/chat/stream', [ChatController::class, 'chatStream']);

@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
@@ -41,7 +40,7 @@ class AuthController extends Controller
                     'authorization' => [
                         'token' => $token,
                         'type' => 'bearer',
-                        'expires_in' => auth()->factory()->getTTL() * 60
+                        'expires_in' => auth()->factory()->getTTL() * 60 * 24 * 7
                     ]
                 ]
             ]);
@@ -77,7 +76,7 @@ class AuthController extends Controller
                     'authorization' => [
                         'token' => $token,
                         'type' => 'bearer',
-                        'expires_in' => Auth::factory()->getTTL() * 60
+                        'expires_in' => Auth::factory()->getTTL() * 60 * 24 * 7
                     ]
                 ]
             ]);
@@ -120,7 +119,7 @@ class AuthController extends Controller
                     'authorization' => [
                         'token' => Auth::refresh(),
                         'type' => 'bearer',
-                        'expires_in' => Auth::factory()->getTTL() * 60
+                        'expires_in' => Auth::factory()->getTTL() * 60 * 24 * 7
                     ]
                 ]
             ]);
@@ -131,4 +130,4 @@ class AuthController extends Controller
             ], 401);
         }
     }
-} 
+}

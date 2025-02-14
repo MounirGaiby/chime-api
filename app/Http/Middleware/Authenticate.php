@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Auth\AuthenticationException;
 
 class Authenticate extends Middleware
 {
@@ -18,10 +19,14 @@ class Authenticate extends Middleware
      */
     protected function unauthenticated($request, array $guards)
     {
-        abort(response()->json([
-            'success' => false,
-            'message' => 'Unauthenticated or token expired',
-        ], 401));
+        $message = 'Authentication required';
+
+        if ($request->bearerToken()) {
+            $message = 'Token is invalid or has expired';
+        }
+
+        // Just throw the exception, let the Handler deal with the response
+        throw new AuthenticationException($message);
     }
 
     /**

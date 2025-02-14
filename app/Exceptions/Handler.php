@@ -26,10 +26,15 @@ class Handler extends ExceptionHandler
     public function register(): void
     {
         $this->renderable(function (AuthenticationException $e, $request) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthenticated.',
-            ], 401);
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $message = $e->getMessage();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'status_code' => 401
+                ], 401);
+            }
         });
 
         $this->renderable(function (ValidationException $e, $request) {
@@ -41,11 +46,13 @@ class Handler extends ExceptionHandler
         });
 
         $this->renderable(function (Throwable $e, $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
                 return response()->json([
                     'success' => false,
-                    'message' => $e->getMessage(),
-                ], 500);
+                    'message' => $e->getMessage() ?: 'An unexpected error occurred',
+                    'status_code' => $status
+                ], $status);
             }
         });
     }
